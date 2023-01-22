@@ -10,7 +10,7 @@ import (
 )
 
 type Config struct {
-	Sects map[string]map[string]string
+	sects map[string]map[string]string
 }
 
 type Logger interface {
@@ -20,7 +20,7 @@ type Logger interface {
 
 func NewConfig() *Config {
 	conf := &Config{
-		Sects: make(map[string]map[string]string),
+		sects: make(map[string]map[string]string),
 	}
 	return conf
 }
@@ -85,7 +85,7 @@ func replaceConstants(sm *stringMask.StringMask, currentMask, setMaskTo rune, co
 					// we have found a constant!
 					sect := sm.GetStringBetween((*leftSquereBrackets)[minIndex].Pos+1, (*colons)[i].Pos-1, true)
 					prop := sm.GetStringBetween((*colons)[i].Pos+1, (*rightSquereBrackets)[minIndex].Pos-1, true)
-					if val, exists := conf.Sects[sect][prop]; exists {
+					if val, exists := conf.sects[sect][prop]; exists {
 						// incredible, it was found!
 						sm.MaskBetween((*leftSquereBrackets)[minIndex].Pos, (*rightSquereBrackets)[minIndex].Pos, setMaskTo)
 						sm.NewTagAtPos((*leftSquereBrackets)[minIndex].Pos, val)
@@ -150,7 +150,7 @@ func hasRequiredClaims(sm *stringMask.StringMask, currentMask, setMaskTo rune, c
 	for i := range claims {
 		sect, prop, isConstant := isConstant(&claims[i])
 		if isConstant {
-			if val, exists := conf.Sects[sect][prop]; exists {
+			if val, exists := conf.sects[sect][prop]; exists {
 				claims[i] = val
 			} else {
 				return false, fmt.Errorf("could not replace constant %v in %v. Constant value not found", claims[i], string(sm.String))
@@ -193,11 +193,11 @@ func upsertProperty(ctx *config.Context, c *Config, key, value string) {
 	if ctx.RunTime.SaveTo == config.Sects {
 		// Get current section
 		cs := ctx.RunTime.Params[config.CurrSect]
-		if prop, exists := c.Sects[cs]; exists {
+		if prop, exists := c.sects[cs]; exists {
 			prop[key] = value
-			c.Sects[cs] = prop
+			c.sects[cs] = prop
 		} else {
-			c.Sects[cs] = map[string]string{key: value}
+			c.sects[cs] = map[string]string{key: value}
 		}
 	} else {
 		// Get current macro
@@ -212,7 +212,7 @@ func appendProperty(ctx *config.Context, c *Config, key string, values ...string
 	if ctx.RunTime.SaveTo == config.Sects {
 		// Get current section
 		cs := ctx.RunTime.Params[config.CurrSect]
-		if prop, exists := c.Sects[cs][key]; exists {
+		if prop, exists := c.sects[cs][key]; exists {
 			var sb strings.Builder
 			sbSize := len(prop) + getValuesLen(values...)
 			sb.Grow(sbSize)
@@ -222,9 +222,9 @@ func appendProperty(ctx *config.Context, c *Config, key string, values ...string
 				sb.WriteString("\n")
 			}
 			sb.WriteString(values[0])
-			c.Sects[cs][key] = sb.String()
+			c.sects[cs][key] = sb.String()
 		} else {
-			c.Sects[cs] = map[string]string{key: values[0]}
+			c.sects[cs] = map[string]string{key: values[0]}
 		}
 	} else {
 		// Get current macro
@@ -262,7 +262,7 @@ func addMacroPropsToSect(ctx *config.Context, conf *Config, macroName *string) e
 	macro := ctx.RunTime.Macros[*macroName]
 
 	// get config sectProps
-	sectProps, sectExists := conf.Sects[cs]
+	sectProps, sectExists := conf.sects[cs]
 	if !sectExists {
 		sectProps = make(map[string]string)
 	}
@@ -273,7 +273,7 @@ func addMacroPropsToSect(ctx *config.Context, conf *Config, macroName *string) e
 			sectProps[k] = v
 		}
 	}
-	conf.Sects[cs] = sectProps
+	conf.sects[cs] = sectProps
 	return nil
 }
 

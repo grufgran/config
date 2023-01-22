@@ -89,7 +89,7 @@ func (mus *macroUseStrategy) execute(ctx *config.Context, conf *Config, um unMar
 	if macro, exists := ctx.RunTime.Macros[mus.macroName]; !exists {
 		return fmt.Errorf("macro %v not found", mus.macroName)
 		// set param values
-	} else if err := macro.SetParamValues(&mus.macroParams, mus.numMacroParams, &conf.Sects, ctx.RunTime.Params[config.CurrSect]); err != nil {
+	} else if err := macro.SetParamValues(&mus.macroParams, mus.numMacroParams, &conf.sects, ctx.RunTime.Params[config.CurrSect]); err != nil {
 		return err
 		// Add macro props to sect
 	} else if ctx.RunTime.SaveTo == config.Sects {
