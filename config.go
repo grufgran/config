@@ -1,10 +1,12 @@
 package config
 
 import (
-	config "config/context"
-	"config/stringMask"
 	"fmt"
 	"strings"
+
+	config "github.com/grufgran/config/context"
+
+	"github.com/grufgran/config/stringMask"
 )
 
 type Config struct {

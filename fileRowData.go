@@ -1,11 +1,12 @@
 package config
 
 import (
-	config "config/context"
-	"config/stringMask"
 	"fmt"
 	"strconv"
 	"strings"
+
+	config "github.com/grufgran/config/context"
+	"github.com/grufgran/config/stringMask"
 )
 
 type dataType int8

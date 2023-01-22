@@ -1,8 +1,9 @@
 package config
 
 import (
-	config "config/context"
 	"fmt"
+
+	config "github.com/grufgran/config/context"
 )
 
 type dataStrategy interface {

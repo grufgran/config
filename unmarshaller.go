@@ -1,6 +1,6 @@
 package config
 
-import conf "config/context"
+import conf "github.com/grufgran/config/context"
 
 type skipSectionMode int8
 

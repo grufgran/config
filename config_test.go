@@ -1,8 +1,9 @@
 package config
 
 import (
-	config "config/context"
 	"testing"
+
+	config "github.com/grufgran/config/context"
 )
 
 func TestNewConfigFromFile(t *testing.T) {

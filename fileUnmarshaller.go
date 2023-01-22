@@ -2,10 +2,11 @@ package config
 
 import (
 	"bufio"
-	conf "config/context"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	conf "github.com/grufgran/config/context"
 )
 
 type fileUnmarshaller struct {
