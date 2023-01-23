@@ -6,8 +6,10 @@ import "fmt"
 func (conf *Config) GetAllSectNames() []string {
 
 	sectNames := make([]string, len(conf.sects))
-	for key, _ := range conf.sects {
-		sectNames = append(sectNames, key)
+	i := 0
+	for key := range conf.sects {
+		sectNames[i] = key
+		i++
 	}
 	return sectNames
 }
