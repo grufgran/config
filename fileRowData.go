@@ -85,7 +85,7 @@ func (frd *fileRowData) setValueAndType(ctx *config.Context, conf *Config, inSki
 		// mask and replace constants.
 		// But, if we are in macroDefine mode, no constants shall be replaces. Those constants will be replaces during macroUse
 		if ctx.RunTime.SaveTo != config.Macros {
-			if err := replaceConstants(sm, '-', 'C', conf); err != nil {
+			if err := conf.replaceConstants(sm, '-', 'C'); err != nil {
 				return err
 			}
 		}
@@ -123,7 +123,7 @@ func (frd *fileRowData) setValueAndType(ctx *config.Context, conf *Config, inSki
 		sm.MaskAtPos(endPoint.Pos, ']')
 
 		// mask and get claims
-		if claimsFulfilled, err := hasRequiredClaims(sm, '-', 'c', conf, ctx); err != nil {
+		if claimsFulfilled, err := conf.hasRequiredClaims(sm, '-', 'c', ctx); err != nil {
 			// return the error
 			return err
 		} else if !claimsFulfilled {
@@ -191,7 +191,7 @@ func (frd *fileRowData) setValueAndType(ctx *config.Context, conf *Config, inSki
 	// mask and replace constants
 	// But, if we are in macroDefine mode, no constants shall be replaces. Those constants will be replaces during macroUse
 	if ctx.RunTime.SaveTo != config.Macros {
-		if err := replaceConstants(sm, '-', 'C', conf); err != nil {
+		if err := conf.replaceConstants(sm, '-', 'C'); err != nil {
 			return err
 		}
 	}

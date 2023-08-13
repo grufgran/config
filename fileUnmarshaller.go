@@ -2,9 +2,11 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	conf "github.com/grufgran/config/context"
 )
@@ -110,10 +112,10 @@ func (fum *fileUnmarshaller) getDataStrategy(ctx *conf.Context) dataStrategy {
 	}
 }
 
-func readConfigFile(ctx *conf.Context, fileName string, conf *Config, logger *Logger) error {
+func readConfigFile(ctx *conf.Context, filename string, conf *Config, logger *Logger) error {
 
 	// get absolutepath for file
-	absFilename, err := filepath.Abs(fileName)
+	absFilename, err := filepath.Abs(filename)
 	if err != nil {
 		return err
 	}
@@ -124,10 +126,23 @@ func readConfigFile(ctx *conf.Context, fileName string, conf *Config, logger *Lo
 	}
 
 	// open file
-	f, err := os.Open(fileName)
+	f, err := os.Open(filename)
 	if err != nil {
-		return err
+		// if file exist in same folder as the executable, then use that. file must not contain any /-characters
+		if strings.Contains(filepath.ToSlash(filename), "/") {
+			return err
+		}
+		absFilename = fmt.Sprintf("%v%v", ctx.GetExeFolder(), filename)
+		if ctx.Stack.Contains(&absFilename) {
+			return nil
+		}
+		if exef, exeErr := os.Open(absFilename); exeErr != nil {
+			return err
+		} else {
+			f = exef
+		}
 	}
+	conf.filesUsed = append(conf.filesUsed, absFilename)
 
 	// remember to close the file at the end of the program
 	defer f.Close()

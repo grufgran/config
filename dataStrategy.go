@@ -3,18 +3,18 @@ package config
 import (
 	"fmt"
 
-	config "github.com/grufgran/config/context"
+	confContext "github.com/grufgran/config/context"
 )
 
 type dataStrategy interface {
-	execute(*config.Context, *Config, unMarshaller, *Logger) error
+	execute(*confContext.Context, *Config, unMarshaller, *Logger) error
 }
 
 // rowHandler for doing nothing. Handles rowTypes: comment, empty and unknown
 type doNothingStrategy struct{}
 
 // handle strings of type: comment, empty and unknown
-func (dns *doNothingStrategy) execute(ctx *config.Context, conf *Config, um unMarshaller, logger *Logger) error {
+func (dns *doNothingStrategy) execute(ctx *confContext.Context, conf *Config, um unMarshaller, logger *Logger) error {
 	return nil
 }
 
@@ -27,7 +27,7 @@ func newSkipSectionStrategy() *skipSectionStrategy {
 }
 
 // handle skip section
-func (s *skipSectionStrategy) execute(ctx *config.Context, conf *Config, um unMarshaller, logger *Logger) error {
+func (s *skipSectionStrategy) execute(ctx *confContext.Context, conf *Config, um unMarshaller, logger *Logger) error {
 	um.setSkipSectionMode(startSkipping)
 	return nil
 }
@@ -44,9 +44,13 @@ func newSectStrategy(currSect string) *sectStrategy {
 }
 
 // handle strings of type [section]
-func (s *sectStrategy) execute(ctx *config.Context, conf *Config, um unMarshaller, logger *Logger) error {
+func (s *sectStrategy) execute(ctx *confContext.Context, conf *Config, um unMarshaller, logger *Logger) error {
 	ctx.RunTime.SetCurrentSect(s.currSect)
 	um.setSkipSectionMode(stopSkipping)
+	// if this sectname is new, then it will be added to conf.sectNames
+	if _, exists := conf.sects[s.currSect]; !exists {
+		conf.sectNames = append(conf.sectNames, s.currSect)
+	}
 	return nil
 }
 
@@ -63,7 +67,7 @@ func newIncludeStrategy(fileName string) *includeStrategy {
 }
 
 // handle strings like include, includeIfExist, includeIfExistWithBasePath
-func (i *includeStrategy) execute(ctx *config.Context, conf *Config, um unMarshaller, logger *Logger) error {
+func (i *includeStrategy) execute(ctx *confContext.Context, conf *Config, um unMarshaller, logger *Logger) error {
 	err := readConfigFile(ctx, i.fileName, conf, logger)
 	return err
 }
@@ -84,21 +88,21 @@ func newMacroUseStrategy(name, params string, numParams int) *macroUseStrategy {
 }
 
 // handle strings of type [section]
-func (mus *macroUseStrategy) execute(ctx *config.Context, conf *Config, um unMarshaller, logger *Logger) error {
+func (mus *macroUseStrategy) execute(ctx *confContext.Context, conf *Config, um unMarshaller, logger *Logger) error {
 	// find macro
-	if macro, exists := ctx.RunTime.Macros[mus.macroName]; !exists {
+	if macro, exists := conf.macros[mus.macroName]; !exists {
 		return fmt.Errorf("macro %v not found", mus.macroName)
 		// set param values
-	} else if err := macro.SetParamValues(&mus.macroParams, mus.numMacroParams, &conf.sects, ctx.RunTime.Params[config.CurrSect]); err != nil {
+	} else if err := macro.SetParamValues(&mus.macroParams, mus.numMacroParams, &conf.sects, ctx.RunTime.Params[confContext.CurrSect]); err != nil {
 		return err
 		// Add macro props to sect
-	} else if ctx.RunTime.SaveTo == config.Sects {
-		if err := addMacroPropsToSect(ctx, conf, &mus.macroName); err != nil {
+	} else if ctx.RunTime.SaveTo == confContext.Sects {
+		if err := conf.addMacroPropsToSect(ctx, &mus.macroName); err != nil {
 			return err
 		}
 		// Add macro props to macro
 	} else {
-		if err := addMacroPropsToMacro(ctx, conf, &mus.macroName); err != nil {
+		if err := conf.addPropsToMacro(ctx, &mus.macroName); err != nil {
 			return err
 		}
 	}
@@ -119,9 +123,9 @@ func newMacroDefineStrategy(name, params string) *macroDefineStrategy {
 }
 
 // handle strings of type [section]
-func (m *macroDefineStrategy) execute(ctx *config.Context, conf *Config, um unMarshaller, logger *Logger) error {
+func (m *macroDefineStrategy) execute(ctx *confContext.Context, conf *Config, um unMarshaller, logger *Logger) error {
 	ctx.RunTime.SetCurrentMacro(m.macroName)
-	ctx.RunTime.Macros[m.macroName] = config.NewMacro(&m.macroParams)
+	conf.macros[m.macroName] = NewMacro(&m.macroParams)
 	um.setSkipSectionMode(stopSkipping)
 	return nil
 }
@@ -143,7 +147,7 @@ func newPropertyStrategy(rowType dataType, key string, value string) *propertySt
 }
 
 // handle strings of type: property and multiline
-func (ps *propertyStrategy) execute(ctx *config.Context, conf *Config, um unMarshaller, logger *Logger) error {
+func (ps *propertyStrategy) execute(ctx *confContext.Context, conf *Config, um unMarshaller, logger *Logger) error {
 	// if it is a multiLineHereDoc rowType then the value contains the hereDocMarker
 	if ps.rowType == multiLineHereDoc {
 		hereDocMarker := ps.value
@@ -161,7 +165,7 @@ func (ps *propertyStrategy) execute(ctx *config.Context, conf *Config, um unMars
 					break
 				}
 				// add data to property
-				appendProperty(ctx, conf, ps.key, data.value, "\n")
+				conf.appendProperty(ctx, ps.key, data.value, "\n")
 
 				// keep rowType = multiLineHereDoc, until we find the hereDocMarker
 				data.rowType = multiLineHereDoc
@@ -174,7 +178,7 @@ func (ps *propertyStrategy) execute(ctx *config.Context, conf *Config, um unMars
 	}
 
 	// add/update property to current sect
-	upsertProperty(ctx, conf, ps.key, ps.value)
+	conf.upsertProperty(ctx, ps.key, ps.value)
 
 	// handle multiLineBackslash
 	if ps.rowType == multiLineBackslash {
@@ -187,7 +191,7 @@ func (ps *propertyStrategy) execute(ctx *config.Context, conf *Config, um unMars
 				data := um.getFileRowData()
 
 				// add data to property
-				appendProperty(ctx, conf, ps.key, data.value)
+				conf.appendProperty(ctx, ps.key, data.value)
 
 				// break when there is no ending backslash
 				if data.rowType != multiLineBackslash {

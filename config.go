@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"strings"
 
-	config "github.com/grufgran/config/context"
+	confContext "github.com/grufgran/config/context"
 
 	"github.com/grufgran/config/stringMask"
 )
 
 type Config struct {
-	sects map[string]map[string]string
-}
-
-type Logger interface {
-	Debug(args ...interface{})
-	Debugf(format string, args ...interface{})
+	sectNames []string
+	sects     map[string]map[string]string
+	macros    map[string]*macro
+	filesUsed []string
 }
 
 func NewConfig() *Config {
@@ -25,11 +23,11 @@ func NewConfig() *Config {
 	return conf
 }
 
-func NewConfigFromFile(ctx *config.Context, fileName string, logger *Logger) (*Config, error) {
+func NewConfigFromFile(ctx *confContext.Context, fileName string, logger *Logger) (*Config, error) {
 
 	// create ctx if not provided
 	if ctx == nil {
-		ctx = config.NewContext(nil)
+		ctx = confContext.NewContext(nil)
 		ctx.SetConfRoot(fileName)
 	} else {
 		if _, err := ctx.GetConfRoot(); err != nil {
@@ -50,8 +48,44 @@ func NewConfigFromFile(ctx *config.Context, fileName string, logger *Logger) (*C
 	return conf, nil
 }
 
+func (conf *Config) SectNames() []string {
+	return conf.sectNames
+}
+
+func (conf *Config) Sect(name string) *Sect {
+	_, exists := conf.sects[name]
+	sect := newSect(name, exists, conf)
+	return sect
+}
+
+func (conf *Config) PropVal(sectName string, propName string) (string, bool) {
+	if sect, exists := conf.sects[sectName]; !exists {
+		return "", exists
+	} else {
+		propVal, exists := sect[propName]
+		return propVal, exists
+	}
+}
+
+func (conf *Config) PropOrDefault(sectName string, propName string, defVal string) string {
+	if val, exists := conf.PropVal(sectName, propName); exists {
+		return val
+	}
+	return defVal
+}
+
+// Provide absolutePath for conf file
+func (conf *Config) ConfFileName() string {
+	return conf.filesUsed[0]
+}
+
+type Logger interface {
+	Debug(args ...any)
+	Debugf(format string, args ...any)
+}
+
 // Replace all constants on row with config values
-func replaceConstants(sm *stringMask.StringMask, currentMask, setMaskTo rune, conf *Config) error {
+func (conf *Config) replaceConstants(sm *stringMask.StringMask, currentMask, setMaskTo rune) error {
 	// Get squere brackets
 	leftSquereBrackets, rightSquereBrackets, err := sm.GetMaskPointsForOppositeRunes('[', ']', currentMask)
 	if err != nil {
@@ -107,7 +141,7 @@ func replaceConstants(sm *stringMask.StringMask, currentMask, setMaskTo rune, co
 	return nil
 }
 
-func hasRequiredClaims(sm *stringMask.StringMask, currentMask, setMaskTo rune, conf *Config, ctx *config.Context) (bool, error) {
+func (conf *Config) hasRequiredClaims(sm *stringMask.StringMask, currentMask, setMaskTo rune, ctx *confContext.Context) (bool, error) {
 	// ok, so we have a section, and now its time to see if it has any claims.
 	// if there is a question mark on the row, then there are claims
 	questionMark := sm.GetFirstRunePoint('?', currentMask)
@@ -148,7 +182,7 @@ func hasRequiredClaims(sm *stringMask.StringMask, currentMask, setMaskTo rune, c
 
 	// Loop claims and replace constants
 	for i := range claims {
-		sect, prop, isConstant := isConstant(&claims[i])
+		sect, prop, isConstant := conf.isConstant(&claims[i])
 		if isConstant {
 			if val, exists := conf.sects[sect][prop]; exists {
 				claims[i] = val
@@ -174,7 +208,7 @@ func hasRequiredClaims(sm *stringMask.StringMask, currentMask, setMaskTo rune, c
 }
 
 // Check if this is a constant. Constant example: "[some sect:some property]"
-func isConstant(s *string) (string, string, bool) {
+func (conf *Config) isConstant(s *string) (string, string, bool) {
 
 	// To start with, a constant must start and end with []
 	if strings.HasPrefix(*s, "[") && strings.HasSuffix(*s, "]") {
@@ -189,10 +223,10 @@ func isConstant(s *string) (string, string, bool) {
 	return "", "", false
 }
 
-func upsertProperty(ctx *config.Context, c *Config, key, value string) {
-	if ctx.RunTime.SaveTo == config.Sects {
+func (c *Config) upsertProperty(ctx *confContext.Context, key, value string) {
+	if ctx.RunTime.SaveTo == confContext.Sects {
 		// Get current section
-		cs := ctx.RunTime.Params[config.CurrSect]
+		cs := ctx.RunTime.Params[confContext.CurrSect]
 		if prop, exists := c.sects[cs]; exists {
 			prop[key] = value
 			c.sects[cs] = prop
@@ -201,20 +235,20 @@ func upsertProperty(ctx *config.Context, c *Config, key, value string) {
 		}
 	} else {
 		// Get current macro
-		cm := ctx.RunTime.Params[config.CurrMacro]
+		cm := ctx.RunTime.Params[confContext.CurrMacro]
 		// always append to macro body
-		m := ctx.RunTime.Macros[cm]
-		m.Properties[key] = value
+		m := c.macros[cm]
+		m.properties[key] = value
 	}
 }
 
-func appendProperty(ctx *config.Context, c *Config, key string, values ...string) {
-	if ctx.RunTime.SaveTo == config.Sects {
+func (c *Config) appendProperty(ctx *confContext.Context, key string, values ...string) {
+	if ctx.RunTime.SaveTo == confContext.Sects {
 		// Get current section
-		cs := ctx.RunTime.Params[config.CurrSect]
+		cs := ctx.RunTime.Params[confContext.CurrSect]
 		if prop, exists := c.sects[cs][key]; exists {
 			var sb strings.Builder
-			sbSize := len(prop) + getValuesLen(values...)
+			sbSize := len(prop) + c.getValuesLen(values...)
 			sb.Grow(sbSize)
 			sb.WriteString(prop)
 			// separate props with \n if there is more than one value
@@ -228,11 +262,11 @@ func appendProperty(ctx *config.Context, c *Config, key string, values ...string
 		}
 	} else {
 		// Get current macro
-		macro := ctx.RunTime.GetCurrentMacro()
+		macro := c.getCurrentMacro(ctx)
 		// always append to macro properties
-		if prop, exists := macro.Properties[key]; exists {
+		if prop, exists := macro.properties[key]; exists {
 			var sb strings.Builder
-			sbSize := len(prop) + getValuesLen(values...)
+			sbSize := len(prop) + c.getValuesLen(values...)
 			sb.Grow(sbSize)
 			sb.WriteString(prop)
 			// separate props with \n if there is more than one value
@@ -240,14 +274,14 @@ func appendProperty(ctx *config.Context, c *Config, key string, values ...string
 				sb.WriteString("\n")
 			}
 			sb.WriteString(values[0])
-			macro.Properties[key] = sb.String()
+			macro.properties[key] = sb.String()
 		} else {
-			macro.Properties[key] = values[0]
+			macro.properties[key] = values[0]
 		}
 	}
 }
 
-func getValuesLen(values ...string) int {
+func (conf *Config) getValuesLen(values ...string) int {
 	l := 0
 	for _, v := range values {
 		l += len(v)
@@ -255,19 +289,19 @@ func getValuesLen(values ...string) int {
 	return l
 }
 
-func addMacroPropsToSect(ctx *config.Context, conf *Config, macroName *string) error {
+func (conf *Config) addMacroPropsToSect(ctx *confContext.Context, macroName *string) error {
 
 	// Get current section
-	cs := ctx.RunTime.Params[config.CurrSect]
-	macro := ctx.RunTime.Macros[*macroName]
+	cs := ctx.RunTime.Params[confContext.CurrSect]
+	macro := conf.macros[*macroName]
 
 	// get config sectProps
 	sectProps, sectExists := conf.sects[cs]
 	if !sectExists {
 		sectProps = make(map[string]string)
 	}
-	for k, v := range macro.Properties {
-		if v, err := applyParamsAndConstants(conf, v, &macro.Parameters); err != nil {
+	for k, v := range macro.properties {
+		if v, err := conf.applyParamsAndConstants(v, &macro.parameters); err != nil {
 			return err
 		} else {
 			sectProps[k] = v
@@ -277,25 +311,25 @@ func addMacroPropsToSect(ctx *config.Context, conf *Config, macroName *string) e
 	return nil
 }
 
-func addMacroPropsToMacro(ctx *config.Context, conf *Config, macroName *string) error {
+func (conf *Config) addPropsToMacro(ctx *confContext.Context, macroName *string) error {
 
 	// Get current macro
-	cm := ctx.RunTime.Params[config.CurrMacro]
-	currMacro := ctx.RunTime.Macros[cm]
-	useMacro := ctx.RunTime.Macros[*macroName]
+	cm := ctx.RunTime.Params[confContext.CurrMacro]
+	currMacro := conf.macros[cm]
+	useMacro := conf.macros[*macroName]
 
 	// add useMacro props to currMacro
-	for k, v := range useMacro.Properties {
-		if v, err := applyParamsAndConstants(conf, v, &useMacro.Parameters); err != nil {
+	for k, v := range useMacro.properties {
+		if v, err := conf.applyParamsAndConstants(v, &useMacro.parameters); err != nil {
 			return err
 		} else {
-			currMacro.Properties[k] = v
+			currMacro.properties[k] = v
 		}
 	}
 	return nil
 }
 
-func applyParamsAndConstants(conf *Config, v string, params *map[string]string) (string, error) {
+func (conf *Config) applyParamsAndConstants(v string, params *map[string]string) (string, error) {
 	// create new stringmask on v
 	sm := stringMask.NewStringMask(v, '-')
 	// begin with replacing all params with real values, ex {$p1} => "val1"
@@ -315,8 +349,14 @@ func applyParamsAndConstants(conf *Config, v string, params *map[string]string) 
 		}
 	}
 	// replace all constants
-	if err := replaceConstants(sm, '-', 'p', conf); err != nil {
+	if err := conf.replaceConstants(sm, '-', 'p'); err != nil {
 		return "", err
 	}
 	return sm.GetString('-', 'p'), nil
+}
+
+func (conf *Config) getCurrentMacro(ctx *confContext.Context) *macro {
+	cm := ctx.RunTime.Params[confContext.CurrMacro]
+	m := conf.macros[cm]
+	return m
 }

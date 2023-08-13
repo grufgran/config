@@ -25,7 +25,6 @@ func NewContext(basePaths map[string]string, claims ...string) *Context {
 		Claims:    make(map[string]struct{}),
 		Stack:     stack{},
 		RunTime: runTimeValues{
-			Macros: make(map[string]*macro),
 			Params: make(map[paramType]string),
 		},
 	}
@@ -114,11 +113,7 @@ func (ctx *Context) SetConfRoot(confRoot string) error {
 			confRoot = filepath.Dir(confRoot)
 		}
 	} else {
-		var sb strings.Builder
-		sb.WriteString("confRoot=")
-		sb.WriteString(confRoot)
-		sb.WriteString(", not found")
-		return fmt.Errorf("%s", sb.String())
+		return fmt.Errorf("confRoot=%v, not found", confRoot)
 	}
 
 	// convert path separators to slash. Nothing is changed on linux or mac. But windows paths are changed
@@ -127,13 +122,7 @@ func (ctx *Context) SetConfRoot(confRoot string) error {
 		// make sure paths always ends with a slash
 		ctx.BasePaths["^/"] = absPath + "/"
 	} else {
-		var sb strings.Builder
-		sb.WriteString("confRoot=")
-		sb.WriteString(confRoot)
-		sb.WriteString(", could not translate ")
-		sb.WriteString(path)
-		sb.WriteString(" to absolute path")
-		return fmt.Errorf("%s", sb.String())
+		return fmt.Errorf("confRoot=%v, could not translate %v to absolute path", confRoot, path)
 	}
 	return nil
 }
@@ -152,12 +141,12 @@ func (ctx *Context) CheckIfFileExists(fileDir, fileName, basePath *string) (bool
 		sb.WriteString(confRoot)
 		sb.WriteString((*fileName)[2:])
 	} else if basePath != nil {
-		// if basePath is provided, then use that instead of current conffile path
+		// if basePath is provided, then use that instead of fileDir
 		sb.Grow(len(*basePath) + len(*fileName))
 		sb.WriteString(*basePath)
 		sb.WriteString(*fileName)
 	} else {
-		// use current conffile path
+		// use fileDir
 		sb.Grow(len(*fileDir) + len(*fileName) + 1)
 		sb.WriteString(*fileDir)
 		sb.WriteRune(os.PathSeparator)
@@ -173,4 +162,14 @@ func (ctx *Context) CheckIfFileExists(fileDir, fileName, basePath *string) (bool
 			return true, &filePath, nil
 		}
 	}
+}
+
+// get the folder of the executable
+func (ctx *Context) GetExeFolder() string {
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	exPath := filepath.Dir(ex)
+	return exPath
 }

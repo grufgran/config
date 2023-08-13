@@ -12,7 +12,6 @@ const (
 )
 
 type runTimeValues struct {
-	Macros map[string]*macro
 	Params map[paramType]string
 	SaveTo saveDest
 }
@@ -27,8 +26,7 @@ func (r *runTimeValues) SetCurrentMacro(m string) {
 	r.SaveTo = Macros
 }
 
-func (r *runTimeValues) GetCurrentMacro() *macro {
+func (r *runTimeValues) GetCurrentMacroName() *string {
 	cm := r.Params[CurrMacro]
-	m := r.Macros[cm]
-	return m
+	return &cm
 }

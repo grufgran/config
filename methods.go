@@ -2,6 +2,10 @@ package config
 
 import "fmt"
 
+func (conf *Config) GetSects() map[string]map[string]string {
+	return conf.sects
+}
+
 // Return a slice of all sectname
 func (conf *Config) GetAllSectNames() []string {
 
